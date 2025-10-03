@@ -37,18 +37,28 @@ def register(client):
         # 🖼️ Upload Media
         if reply.media:
             try:
-                # Download file dari pesan
-                file_path = await client.download_media(reply, file="./")
-                # Upload ke Telegraph (return list berisi path)
+                # Buat folder downloads jika belum ada
+                if not os.path.exists("./downloads"):
+                    os.makedirs("./downloads")
+
+                # Download file ke folder lokal
+                file_path = await client.download_media(reply, file="./downloads/")
+                if not file_path or not os.path.exists(file_path):
+                    await event.reply("❌ Gagal: file tidak ditemukan setelah diunduh.")
+                    return
+
+                # Upload ke Telegraph (return list path)
                 uploaded = upload_file(file_path)
-                src = uploaded[0]
-                url = f"https://telegra.ph{src}"
+                url = f"https://telegra.ph{uploaded[0]}"
+
                 await event.reply(
                     f"📎 <b>Media berhasil diunggah</b>\n🔗 <a href='{url}'>Klik di sini</a>",
                     link_preview=True
                 )
-                # Hapus file lokal setelah upload
+
+                # Bersihkan file lokal setelah selesai
                 os.remove(file_path)
+
             except Exception as e:
                 await event.reply(f"❌ Gagal upload media:\n<code>{e}</code>")
 
