@@ -1,6 +1,7 @@
 import importlib
 import pkgutil
 import inspect
+import traceback
 
 # Dictionary global untuk menampung semua HELP dari tiap modul
 HELP = {}
@@ -32,20 +33,27 @@ async def init(client):
                     try:
                         await func(client)
                     except Exception as e:
-                        print(f"⚠️ Modul {module_name} gagal init_owner(): {e}")
+                        print(f"⚠️ Modul {module_name} gagal init_owner() (async): {e}")
+                        traceback.print_exc()
                 else:
                     try:
                         func(client)
                     except Exception as e:
-                        print(f"⚠️ Modul {module_name} gagal init_owner(): {e}")
+                        print(f"⚠️ Modul {module_name} gagal init_owner() (sync): {e}")
+                        traceback.print_exc()
                 print(f"✅ Modul {module_name} dimuat via init_owner()")
 
             # 🔹 Gabungkan HELP kalau ada
             if hasattr(module, "HELP"):
-                for k, v in module.HELP.items():
-                    if k not in HELP:
-                        HELP[k] = []
-                    HELP[k].extend(v)
+                try:
+                    for k, v in module.HELP.items():
+                        if k not in HELP:
+                            HELP[k] = []
+                        HELP[k].extend(v)
+                except Exception as e:
+                    print(f"⚠️ Gagal menggabungkan HELP dari modul {module_name}: {e}")
+                    traceback.print_exc()
 
         except Exception as e:
             print(f"❌ Gagal load modul {module_name}: {e}")
+            traceback.print_exc()
