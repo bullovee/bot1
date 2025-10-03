@@ -54,14 +54,19 @@ def register_commands(client):
         ping_ms = int((end - start) * 1000)
         await event.edit(f"🏓 Pong!\n⏱ {ping_ms} ms")
 
-    # 📌 .id
+    # 📌 .id (✅ fixed)
     @client.on(events.NewMessage(pattern=r"^\.id$"))
     async def handler_id(event):
         chat = await event.get_chat()
         chat_id = chat.id
         if not str(chat_id).startswith("-100") and (event.is_group or event.is_channel):
             chat_id = f"-100{abs(chat_id)}"
-        await event.edit(f"🆔 Chat ID: {chat_id}")
+
+        # ✅ Pastikan cuma edit kalau pesannya dikirim oleh bot/userbot sendiri
+        if event.out:
+            await event.edit(f"🆔 Chat ID: {chat_id}")
+        else:
+            await event.reply(f"🆔 Chat ID: {chat_id}")
 
     # 📌 .buat
     @client.on(events.NewMessage(pattern=r"^\.buat (b|g|c)(?: (\d+))? (.+)"))
