@@ -102,4 +102,9 @@ async def tgcmd(event):
             content=[{"tag": "pre", "children": [content]}],
         )
         await xx.eor(
-            f"✅ Past
+            f"✅ Pasted ke Telegraph: [Klik Disini]({makeit['url']})",
+            link_preview=False,
+        )
+
+    except Exception as e:
+        await xx.eor(f"❌ Terjadi error: {e}")
