@@ -1,9 +1,15 @@
 # © 2025 - Buatan khusus untuk Bullovee Bot
 # Modul: Telegraph Uploader
-# Help Menu
-HELP = {
+
+# ✅ Perbaikan: Tambahkan ke HELP global, jangan timpa
+try:
+    HELP
+except NameError:
+    HELP = {}
+
+HELP.update({
     "telegraph": """
-📌 **Perintah:** `.telegraph [judul opsional]`
+📌 **Perintah:** `.tg [judul opsional]`
 ↪ Balas ke teks atau media untuk mengupload ke [Telegraph](https://telegra.ph)
 
 ✨ **Contoh Penggunaan:**
@@ -17,7 +23,7 @@ HELP = {
 - Sticker otomatis dikonversi ke PNG.
 - TGS (animated sticker) otomatis dikonversi ke GIF.
 """
-}
+})
 
 import os
 import pathlib
@@ -34,7 +40,7 @@ if not telegraph.get_access_token():
     telegraph.create_account(short_name="bullovee_bot")
 
 
-@ultroid_cmd(pattern="telegraph( (.*)|$)")
+@ultroid_cmd(pattern="tg( (.*)|$)")
 async def telegraphcmd(event):
     """
     Upload media atau text ke Telegraph
