@@ -27,7 +27,8 @@ def register(client):
             await event.reply("❌ Balas ke pesan teks atau media terlebih dahulu.")
             return
 
-        if mode == "m":  # 📎 Upload Media
+        # ==================== 📎 Upload Media ====================
+        if mode == "m":
             await event.reply("⏳ Sedang mengunduh media...")
             start = datetime.now()
             downloaded_file_name = await client.download_media(
@@ -36,14 +37,15 @@ def register(client):
             end = datetime.now()
             ms = (end - start).seconds
 
-            # ✅ Info unduhan selesai
-            await event.reply(
-                f"✅ Media diunduh ke `{downloaded_file_name}` dalam {ms} detik."
-            )
+            if not downloaded_file_name or not os.path.exists(downloaded_file_name):
+                await event.reply("❌ Gagal mengunduh media, file tidak ditemukan.")
+                return
 
-            # Konversi webp ke PNG (sticker dsb)
+            await event.reply(f"✅ Media diunduh ke `{downloaded_file_name}` dalam {ms} detik.")
+
+            # Konversi WebP → PNG (untuk stiker)
             if downloaded_file_name.endswith(".webp"):
-                resize_image(downloaded_file_name)
+                downloaded_file_name = convert_webp_to_png(downloaded_file_name)
 
             # Upload ke Telegraph
             try:
@@ -53,15 +55,19 @@ def register(client):
             except exceptions.TelegraphException as exc:
                 await event.reply(f"❌ Gagal upload media:\n`{exc}`")
             finally:
-                os.remove(downloaded_file_name)
+                if os.path.exists(downloaded_file_name):
+                    os.remove(downloaded_file_name)
 
-        elif mode == "t":  # 📝 Upload Teks
+        # ==================== 📝 Upload Teks ====================
+        elif mode == "t":
             if not reply.message:
                 await event.reply("❌ Tidak ada teks untuk diunggah.")
                 return
 
-            page_title = (await client.get_entity(reply.sender_id)).first_name
+            user = await client.get_entity(reply.sender_id)
+            page_title = user.first_name or "Telegraph"
             page_content = reply.message.replace("\n", "<br>")
+
             try:
                 response = telegraph.create_page(page_title, html_content=page_content)
                 url = f"https://telegra.ph/{response['path']}"
@@ -70,13 +76,16 @@ def register(client):
                 await event.reply(f"❌ Gagal upload teks:\n`{exc}`")
 
 
-def resize_image(image_path: str):
-    """Konversi gambar WebP ke PNG agar bisa diupload ke Telegraph"""
-    im = Image.open(image_path)
-    im.save(image_path, "PNG")
+def convert_webp_to_png(image_path: str) -> str:
+    """Konversi file .webp menjadi .png agar bisa diupload ke Telegraph"""
+    im = Image.open(image_path).convert("RGBA")
+    png_path = image_path.rsplit(".", 1)[0] + ".png"
+    im.save(png_path, "PNG")
+    os.remove(image_path)  # hapus file webp asli
+    return png_path
 
 
-# 🆘 Daftar perintah Help lokal
+# 🆘 Daftar perintah Help lokal (kalau pakai sistem help manual)
 HELP = {
     "telegraph": [
         "• `.tg m` → Balas ke media untuk upload ke Telegraph",
