@@ -1,5 +1,5 @@
-# 📌 tg.py — Modul Telegraph untuk Telethon
-# Adaptasi dari Man-Userbot agar cocok dengan struktur perintah/ di userbot kamu
+# 📌 tg.py — Modul Telegraph untuk Telethon (Fix Upload)
+# Adaptasi dari Man-Userbot & versi stabil untuk Railway
 
 import os
 from datetime import datetime
@@ -29,7 +29,6 @@ def register(client):
 
         # ==================== 📎 Upload Media ====================
         if mode == "m":
-            await event.reply("⏳ Sedang mengunduh media...")
             start = datetime.now()
             downloaded_file_name = await client.download_media(
                 reply, TEMP_DOWNLOAD_DIRECTORY
@@ -41,15 +40,18 @@ def register(client):
                 await event.reply("❌ Gagal mengunduh media, file tidak ditemukan.")
                 return
 
-            await event.reply(f"✅ Media diunduh ke `{downloaded_file_name}` dalam {ms} detik.")
+            await event.reply(
+                f"✅ Media diunduh ke `{downloaded_file_name}` dalam {ms} detik."
+            )
 
             # Konversi WebP → PNG (untuk stiker)
             if downloaded_file_name.endswith(".webp"):
                 downloaded_file_name = convert_webp_to_png(downloaded_file_name)
 
-            # Upload ke Telegraph
+            # ✅ Upload ke Telegraph (pakai file object, bukan path string)
             try:
-                media_urls = upload_file(downloaded_file_name)
+                with open(downloaded_file_name, "rb") as f:
+                    media_urls = upload_file(f)
                 url = f"https://telegra.ph{media_urls[0]}"
                 await event.reply(f"📎 Media berhasil diunggah:\n{url}", link_preview=True)
             except exceptions.TelegraphException as exc:
