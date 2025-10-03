@@ -1,7 +1,7 @@
 # © 2025 - Buatan khusus untuk Bullovee Bot
 # Modul: Telegraph Uploader
 
-# ✅ Perbaikan: Tambahkan ke HELP global, jangan timpa
+# ✅ Gunakan update, bukan overwrite
 try:
     HELP
 except NameError:
@@ -9,7 +9,7 @@ except NameError:
 
 HELP.update({
     "telegraph": """
-📌 **Perintah:** `.tg [judul opsional]`
+📌 **Perintah:** `.telegraph [judul opsional]`
 ↪ Balas ke teks atau media untuk mengupload ke [Telegraph](https://telegra.ph)
 
 ✨ **Contoh Penggunaan:**
@@ -24,6 +24,7 @@ HELP.update({
 - TGS (animated sticker) otomatis dikonversi ke GIF.
 """
 })
+
 
 import os
 import pathlib
