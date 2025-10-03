@@ -1,8 +1,9 @@
 import os
+import traceback
 from telethon import events
 from telegraph import Telegraph, upload_file
 
-# 📌 Inisialisasi Telegraph (sekali saja)
+# 📌 Inisialisasi Telegraph hanya sekali
 telegraph = Telegraph()
 telegraph.create_account(short_name="BulloveUserbot")
 
@@ -17,38 +18,33 @@ def register(client):
         title = event.pattern_match.group(1).strip() or "Bullove Telegraph"
 
         # 📝 Upload Teks
-        if reply.message and not reply.media:
+        if reply.text and not reply.media:
             try:
-                content = f"<pre>{reply.message}</pre>"
-                result = telegraph.create_page(
+                html_content = reply.text.replace("\n", "<br>")
+                page = telegraph.create_page(
                     title=title,
                     author_name="Bullove Bot",
-                    html_content=content
+                    html_content=html_content
                 )
-                url = f"https://telegra.ph/{result['path']}"
+                url = f"https://telegra.ph/{page['path']}"
                 await event.reply(
                     f"📝 <b>Berhasil Upload Teks</b>\n🔗 <a href='{url}'>Klik di sini</a>",
                     link_preview=True
                 )
             except Exception as e:
-                await event.reply(f"❌ Gagal upload teks:\n<code>{e}</code>")
+                tb = traceback.format_exc()
+                await event.reply(f"❌ Gagal upload teks:\n<code>{e}</code>\n<pre>{tb}</pre>")
             return
 
-        # 🖼️ Upload Media
+        # 🖼️ Upload Media (foto/video/gif/sticker)
         if reply.media:
             try:
-                # Buat folder downloads jika belum ada
-                if not os.path.exists("./downloads"):
-                    os.makedirs("./downloads")
-
-                # Download file ke folder lokal
-                file_path = await client.download_media(reply, file="./downloads/")
+                file_path = await client.download_media(reply)
                 if not file_path or not os.path.exists(file_path):
-                    await event.reply("❌ Gagal: file tidak ditemukan setelah diunduh.")
+                    await event.reply("❌ Gagal download file media.")
                     return
 
-                # Upload ke Telegraph (return list path)
-                uploaded = upload_file(file_path)
+                uploaded = upload_file(file_path)  # ✅ return list, ambil index [0]
                 url = f"https://telegra.ph{uploaded[0]}"
 
                 await event.reply(
@@ -56,13 +52,12 @@ def register(client):
                     link_preview=True
                 )
 
-                # Bersihkan file lokal setelah selesai
                 os.remove(file_path)
-
             except Exception as e:
-                await event.reply(f"❌ Gagal upload media:\n<code>{e}</code>")
+                tb = traceback.format_exc()
+                await event.reply(f"❌ Gagal upload media:\n<code>{e}</code>\n<pre>{tb}</pre>")
 
-# 🆘 Daftar perintah untuk .help
+# 🆘 Integrasi ke .help
 HELP = {
     "Tg": [
         "• `.tg [judul opsional]` → Balas ke teks atau media untuk upload ke Telegraph.",
