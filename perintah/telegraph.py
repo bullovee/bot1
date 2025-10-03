@@ -1,110 +1,63 @@
-# © 2025 - Buatan khusus untuk Bullovee Bot
-# Modul: Telegraph Uploader (Perintah .tg)
+import os
+import pathlib
+from telegraph import Telegraph, upload_file
+from PIL import Image
+from pyrogram import Client, filters
 
+# 📝 Menu help untuk .tg
 HELP = {
-    "tg": [
-        """
+    "tg": """
 📌 **Perintah:** `.tg [judul opsional]`
-↪ Balas ke teks atau media untuk mengupload ke [Telegraph](https://telegra.ph)
+↪ Balas ke teks atau media untuk upload ke [Telegraph](https://telegra.ph)
 
 ✨ **Contoh Penggunaan:**
 - Balas teks ➡️ `.tg JudulSaya`
 - Balas file / gambar ➡️ `.tg`
 - Balas sticker / animasi ➡️ `.tg Stickerku`
-
-📝 **Keterangan:**
-- Teks akan ditempel ke halaman Telegraph.
-- Gambar / file akan diupload ke Telegraph File Hosting.
-- Sticker otomatis dikonversi ke PNG.
-- TGS (animated sticker) otomatis dikonversi ke GIF.
-        """
-    ]
+"""
 }
 
-import os
-import pathlib
-from PIL import Image
-from telegraph import Telegraph
-
-from userbot import ultroid_bot
-from userbot.utils import ultroid_cmd, mediainfo, uf, bash, get_string
-
-# Inisialisasi Telegraph
+# 🧭 Inisialisasi Telegraph
 telegraph = Telegraph()
-if not telegraph.get_access_token():
-    telegraph.create_account(short_name="bullovee_bot")
+telegraph.create_account(short_name="bullovee_bot")
 
 
-@ultroid_cmd(pattern="tg( (.*)|$)")
-async def tgcmd(event):
-    """
-    Upload media atau text ke Telegraph
-    Gunakan: reply ke pesan / file → ketik .tg [judul opsional]
-    """
-    xx = await event.eor(get_string("com_1"))
-    match = (event.pattern_match.group(1) or "").strip() or "Bullovee Telegraph"
+def init(client: Client):
+    @client.on_message(filters.command("tg", prefixes=".") & filters.me)
+    async def tg_handler(c: Client, m):
+        reply = m.reply_to_message
+        title = "Bullovee Telegraph"
+        if len(m.command) > 1:
+            title = " ".join(m.command[1:])
 
-    reply = await event.get_reply_message()
-    if not reply:
-        return await xx.eor("⚠️ Balas ke pesan atau file untuk diupload.")
+        if not reply:
+            return await m.reply("⚠️ Balas ke pesan atau file untuk diupload.")
 
-    # === Jika text biasa ===
-    if not reply.media and reply.message:
-        content = reply.message
-        try:
-            makeit = telegraph.create_page(
-                title=match,
-                author_name="Bullovee Bot",
-                content=[{"tag": "p", "children": [content]}],
-            )
-            return await xx.eor(
-                f"✅ Pasted ke Telegraph: [Klik Disini]({makeit['url']})",
-                link_preview=False,
-            )
-        except Exception as e:
-            return await xx.eor(f"❌ Terjadi error saat upload teks: {e}")
-
-    # === Jika media ===
-    getit = await reply.download_media()
-    dar = mediainfo(reply.media)
-
-    try:
-        # Sticker → convert ke PNG
-        if dar == "sticker":
-            file = f"{getit}.png"
-            Image.open(getit).save(file)
-            os.remove(getit)
-            getit = file
-
-        # Animated sticker (TGS) → convert ke GIF
-        elif dar.endswith("animated"):
-            file = f"{getit}.gif"
-            await bash(f"lottie_convert.py '{getit}' {file}")
-            os.remove(getit)
-            getit = file
-
-        # Jika gambar/file biasa
-        if "document" not in dar:
+        # 📝 Kalau teks
+        if reply.text:
             try:
-                nn = uf(getit)
-                amsg = f"✅ Uploaded ke [Telegraph]({nn})"
+                page = telegraph.create_page(
+                    title=title,
+                    content=[reply.text.html.replace("\n", "<br>")]
+                )
+                url = page["url"]
+                await m.reply(f"✅ Pasted ke Telegraph:\n👉 {url}")
             except Exception as e:
-                amsg = f"❌ Gagal Upload: {e}"
-            os.remove(getit)
-            return await xx.eor(amsg)
+                await m.reply(f"❌ Gagal membuat halaman Telegraph:\n`{e}`")
+            return
 
-        # Jika file teks / dokumen
-        content = pathlib.Path(getit).read_text()
-        os.remove(getit)
-        makeit = telegraph.create_page(
-            title=match,
-            author_name="Bullovee Bot",
-            content=[{"tag": "pre", "children": [content]}],
-        )
-        await xx.eor(
-            f"✅ Pasted ke Telegraph: [Klik Disini]({makeit['url']})",
-            link_preview=False,
-        )
+        # 📎 Kalau file/media
+        try:
+            file_path = await reply.download()
+            # Kalau sticker (webp), convert ke png dulu
+            if file_path.endswith(".webp"):
+                png_path = file_path + ".png"
+                Image.open(file_path).save(png_path)
+                os.remove(file_path)
+                file_path = png_path
 
-    except Exception as e:
-        await xx.eor(f"❌ Terjadi error: {e}")
+            media_url = upload_file(file_path)[0]
+            os.remove(file_path)
+            await m.reply(f"✅ Uploaded ke Telegraph:\n👉 https://telegra.ph{media_url}")
+        except Exception as e:
+            await m.reply(f"❌ Gagal upload media:\n`{e}`")
