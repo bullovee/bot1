@@ -1,9 +1,8 @@
 import os
-import aiohttp
 from telethon import events
-from telegraph import upload_file, Telegraph
+from telegraph import Telegraph, upload_file
 
-# Inisialisasi Telegraph
+# Inisialisasi Telegraph sekali saja
 telegraph = Telegraph()
 telegraph.create_account(short_name="userbot")
 
@@ -14,33 +13,36 @@ def register(client):
             await event.reply("❌ Balas ke pesan teks atau media untuk diunggah ke Telegraph.")
             return
 
-        reply_msg = await event.get_reply_message()
+        reply = await event.get_reply_message()
         title = event.pattern_match.group(1).strip() or "Bullove Telegraph"
 
         # 📝 Upload teks
-        if reply_msg.message and not reply_msg.media:
+        if reply.message and not reply.media:
             try:
-                html_content = f"<pre>{reply_msg.message}</pre>"
-                response = telegraph.create_page(title, html_content=html_content)
-                url = f"https://telegra.ph/{response['path']}"
+                content = f"<pre>{reply.message}</pre>"
+                result = telegraph.create_page(
+                    title=title,
+                    author_name="Bullove Bot",
+                    html_content=content
+                )
+                url = f"https://telegra.ph/{result['path']}"
                 await event.reply(f"📝 <b>Berhasil Upload Teks</b>\n🔗 <a href='{url}'>Klik di sini</a>", link_preview=True)
             except Exception as e:
                 await event.reply(f"❌ Gagal upload teks:\n<code>{e}</code>")
             return
 
         # 🖼️ Upload media
-        if reply_msg.media:
+        if reply.media:
             try:
-                file_path = await client.download_media(reply_msg, file="./")
-                uploaded = upload_file(file_path)
+                file_path = await client.download_media(reply, file="./")
+                uploaded = upload_file(file_path)  # ← ini return list, bukan dict
                 url = f"https://telegra.ph{uploaded[0]}"
                 await event.reply(f"📎 <b>Media berhasil diunggah</b>\n🔗 <a href='{url}'>Klik di sini</a>", link_preview=True)
                 os.remove(file_path)
             except Exception as e:
                 await event.reply(f"❌ Gagal upload media:\n<code>{e}</code>")
-            return
 
-# 🆘 HELP agar muncul di .help
+# 🆘 HELP untuk perintah ini
 HELP = {
     "Tg": [
         "• `.tg [judul opsional]` → Balas ke teks atau media untuk upload ke Telegraph."
