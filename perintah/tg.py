@@ -1,54 +1,62 @@
 import os
-import pathlib
-from telethon import events
-from telegraph import Telegraph, upload_file
-from PIL import Image
+import asyncio
+import tempfile
+from telegraph import upload_file, Telegraph
+from pyrogram import Client, filters
 
-# 📝 HELP
 HELP = {
-    "tg": """
-📌 **Perintah:** `.tg [judul opsional]`
-↪ Balas ke teks atau media untuk upload ke [Telegraph](https://telegra.ph)
-"""
+    "Tg": [
+        ".tg [judul opsional] → Balas ke teks atau media untuk upload ke Telegraph"
+    ]
 }
 
 telegraph = Telegraph()
-telegraph.create_account(short_name="bullovee_bot")
+telegraph.create_account(short_name="bullove")
 
+def get_telegraph_url(result):
+    """Helper untuk ambil URL telegraph dari hasil upload"""
+    if isinstance(result, list) and len(result) > 0:
+        first = result[0]
+        if isinstance(first, dict):
+            return f"https://telegra.ph{first.get('src')}"
+        elif isinstance(first, str):
+            return f"https://telegra.ph{first}"
+    return None
 
-def init(client):
-    @client.on(events.NewMessage(pattern=r"^\.tg(?: |$)(.*)"))
-    async def handler_tg(event):
-        reply = await event.get_reply_message()
-        title = event.pattern_match.group(1).strip() or "Bullovee Telegraph"
+def register(client: Client):
 
-        if not reply:
-            return await event.reply("⚠️ Balas ke pesan atau file untuk diupload.")
-
-        # 📝 Kalau teks
-        if reply.text:
-            try:
-                page = telegraph.create_page(
-                    title=title,
-                    content=[reply.text.replace("\n", "<br>")]
-                )
-                url = page["url"]
-                await event.reply(f"✅ Pasted ke Telegraph:\n👉 {url}")
-            except Exception as e:
-                await event.reply(f"❌ Gagal membuat halaman Telegraph:\n`{e}`")
-            return
-
-        # 📎 Kalau media/file
+    @client.on_message(filters.me & filters.command("tg", prefixes="."))
+    async def telegraph_handler(_, message):
         try:
-            file_path = await reply.download_media()
-            if file_path.endswith(".webp"):
-                png_path = file_path + ".png"
-                Image.open(file_path).save(png_path)
-                os.remove(file_path)
-                file_path = png_path
+            # ambil judul opsional
+            args = message.text.split(maxsplit=1)
+            title = args[1] if len(args) > 1 else "Telegraph Upload"
 
-            media_url = upload_file(file_path)[0]
-            os.remove(file_path)
-            await event.reply(f"✅ Uploaded ke Telegraph:\n👉 https://telegra.ph{media_url}")
+            if message.reply_to_message:
+                reply = message.reply_to_message
+
+                # 📌 Kalau reply ke teks
+                if reply.text or reply.caption:
+                    text_content = reply.text or reply.caption
+                    response = telegraph.create_page(
+                        title,
+                        html_content=f"<pre>{text_content}</pre>"
+                    )
+                    await message.reply(f"✅ Teks berhasil diupload:\n👉 https://telegra.ph/{response['path']}")
+
+                # 📌 Kalau reply ke media
+                elif reply.media:
+                    with tempfile.TemporaryDirectory() as tmpdir:
+                        file_path = await client.download_media(reply, file_name=tmpdir)
+                        result = upload_file(file_path)
+                        url = get_telegraph_url(result)
+                        if url:
+                            await message.reply(f"✅ Media berhasil diupload:\n👉 {url}")
+                        else:
+                            await message.reply("❌ Gagal upload: hasil kosong.")
+            else:
+                await message.reply("❌ Balas ke teks atau media dengan perintah `.tg [judul opsional]`")
+
         except Exception as e:
-            await event.reply(f"❌ Gagal upload media:\n`{e}`")
+            await message.reply(f"❌ Gagal upload media:\n<code>{e}</code>")
+            print(f"TG ERROR: {e}")
