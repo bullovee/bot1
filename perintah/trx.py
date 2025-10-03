@@ -4,6 +4,7 @@ HELP = {
         ".danamasuk → konfirmasi dana sudah diterima",
         ".format → template transaksi",
         ".aturan → peraturan rekber",
+        ".fee → informasi biaya rekber",
     ]
 }
 
@@ -101,6 +102,27 @@ def register_trx(client):
             "❗ Jangan berikan OTP (tele/WA/email) di luar transaksi.\n"
             "❗ Seller & Buyer dilarang hilang saat transaksi.\n\n"
             "®️ 𝙒𝙖𝙧𝙪𝙣𝙜 𝘽𝙪𝙡𝙡𝙤𝙫𝙚",
+            link_preview=False,
+        )
+
+    # 📌 .fee
+    @client.on(events.NewMessage(pattern=r"^\.fee$"))
+    async def handler_fee(event):
+        await event.delete()
+        await event.respond(
+            "**BIAYA REKBER / FEE REKBER**\n\n"
+            "```\n"
+            "10.000  - 100.000   » 5k\n"
+            "100.001 - 450.000   » 10k\n"
+            "450.001 - 600.000   » 15k\n"
+            "600.001 - 800.000   » 20k\n"
+            "800.001 - 1.000.000 » 30k\n"
+            "1juta   - 5juta     » 50k\n"
+            "```\n\n"
+            "[CH Warung Bullove](https://t.me/warungbullove_info/850) "
+            "[GC Warung Bullove](http://t.me/jb_warungbullove) "
+            "[Testimo Rekber](https://t.me/WARUNGBULLOVE_INFO/850)\n\n"
+            "**Rekber** @warungbullove",
             link_preview=False,
         )
 
