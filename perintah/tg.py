@@ -1,66 +1,60 @@
-# perintah/tg.py
-# 📌 Modul Telegraph (.tg) — FIX FINAL
+import os
 from telethon import events
 from telegraph import Telegraph, upload_file
-from PIL import Image
-import os
 
-# Buat akun Telegraph sekali saja
+# 📌 Inisialisasi Telegraph (sekali saja)
 telegraph = Telegraph()
-telegraph.create_account(short_name="bullovee_bot")
-
-HELP = {
-    "Tg": """
-📌 **Perintah:** `.tg [judul opsional]`
-↪ Balas ke teks atau media untuk upload ke [Telegraph](https://telegra.ph)
-
-✨ **Contoh:**
-- Balas teks ➡️ `.tg Judul`
-- Balas gambar / file ➡️ `.tg`
-"""
-}
+telegraph.create_account(short_name="BulloveUserbot")
 
 def register(client):
+    @client.on(events.NewMessage(pattern=r"^\.tg(?: |$)(.*)"))
+    async def tg_handler(event):
+        if not event.is_reply:
+            await event.reply("❌ Balas ke pesan teks atau media untuk diunggah ke Telegraph.")
+            return
 
-    @client.on(events.NewMessage(pattern=r"^\.tg(?: (.+))?$"))
-    async def telegraph_handler(event):
-        title = event.pattern_match.group(1) or "Bullove Telegraph"
         reply = await event.get_reply_message()
+        title = event.pattern_match.group(1).strip() or "Bullove Telegraph"
 
-        if not reply:
-            return await event.reply("❌ Balas ke pesan atau media untuk upload.")
-
-        # 📝 Kalau reply berupa teks
+        # 📝 Upload Teks
         if reply.message and not reply.media:
-            content = f"<pre>{reply.message}</pre>"
-            page = telegraph.create_page(
-                title=title,
-                author_name="Bullove Bot",
-                html_content=content
-            )
-            url = f"https://telegra.ph/{page['path']}"
-            return await event.reply(
-                f"📝 <b>Berhasil Upload Teks</b>\n🔗 <a href='{url}'>Klik di sini</a>",
-                link_preview=True
-            )
+            try:
+                content = f"<pre>{reply.message}</pre>"
+                result = telegraph.create_page(
+                    title=title,
+                    author_name="Bullove Bot",
+                    html_content=content
+                )
+                url = f"https://telegra.ph/{result['path']}"
+                await event.reply(
+                    f"📝 <b>Berhasil Upload Teks</b>\n🔗 <a href='{url}'>Klik di sini</a>",
+                    link_preview=True
+                )
+            except Exception as e:
+                await event.reply(f"❌ Gagal upload teks:\n<code>{e}</code>")
+            return
 
-        # 🖼️ Kalau reply berupa media
-        file_path = await reply.download_media()
-        try:
-            # Jika sticker .webp → ubah ke .png
-            if file_path.endswith(".webp"):
-                png_path = file_path.replace(".webp", ".png")
-                Image.open(file_path).save(png_path)
+        # 🖼️ Upload Media
+        if reply.media:
+            try:
+                # Download file dari pesan
+                file_path = await client.download_media(reply, file="./")
+                # Upload ke Telegraph (return list berisi path)
+                uploaded = upload_file(file_path)
+                src = uploaded[0]
+                url = f"https://telegra.ph{src}"
+                await event.reply(
+                    f"📎 <b>Media berhasil diunggah</b>\n🔗 <a href='{url}'>Klik di sini</a>",
+                    link_preview=True
+                )
+                # Hapus file lokal setelah upload
                 os.remove(file_path)
-                file_path = png_path
+            except Exception as e:
+                await event.reply(f"❌ Gagal upload media:\n<code>{e}</code>")
 
-            result = upload_file(file_path)
-            # result biasanya: [{'src': '/file/abc123.png'}]
-            if isinstance(result, list):
-                src = result[0]["src"]
-            elif isinstance(result, dict):
-                src = result.get("src")
-            else:
-                raise Exception(f"Respon upload tidak dikenal: {result}")
-
-            url = f"https://telegra.ph{src
+# 🆘 Daftar perintah untuk .help
+HELP = {
+    "Tg": [
+        "• `.tg [judul opsional]` → Balas ke teks atau media untuk upload ke Telegraph.",
+    ]
+}
