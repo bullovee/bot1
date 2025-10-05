@@ -50,12 +50,34 @@ def init(client):
                     model="gpt-4o-mini",
                     messages=[
                         {"role": "system", "content": "You are a translation assistant."},
-                        {"role": "user", "content": f"Detect the language and translate this to Indonesian. Also include the detected language name:\n{original_text}"}
+                        {"role": "user", "content": f"Detect the language and translate this to Indonesian. Also include the detected language name and language code (like EN, ID, JP). Respond in JSON with keys: detected_language_name, detected_language_code, translated_text."}
                     ]
                 )
 
-                translated_text = response.choices[0].message.content.strip()
-                await event.reply(f"👤 he/she {nama}:\n\"{translated_text}\"")
+                import json
+                data = json.loads(response.choices[0].message.content)
+                lang_name = data.get("detected_language_name", "Unknown")
+                lang_code = data.get("detected_language_code", "??").upper()
+                translated_text = data.get("translated_text", "")
+
+                # 🇬🇧 Bendera otomatis (sederhana)
+                FLAG_MAP = {
+                    "EN": "🇬🇧", "ID": "🇮🇩", "JP": "🇯🇵", "KR": "🇰🇷",
+                    "CN": "🇨🇳", "FR": "🇫🇷", "DE": "🇩🇪", "ES": "🇪🇸",
+                    "RU": "🇷🇺", "AR": "🇸🇦"
+                }
+                flag = FLAG_MAP.get(lang_code, "🏳️")
+
+                reply_text = (
+                    f"👤 𝗪𝗮𝗿𝘂𝗻𝗴 𝗕𝘂𝗹𝗹𝗼𝘃𝗲 **Said** :\n"
+                    f"`⎯⎯⎯⎯⎯⎯⎯⎯⎯`\n"
+                    f"`{flag} {lang_code} : {original_text}`\n"
+                    f"`🇮🇩 ID : {translated_text}`\n"
+                    f"`⎯⎯⎯⎯⎯⎯⎯⎯⎯`\n"
+                    f"_Detected language {lang_name} Translation to Indonesian._"
+                )
+
+                await event.reply(reply_text)
 
             except Exception as e:
                 await event.reply(f"❌ Gagal translate: {e}")
