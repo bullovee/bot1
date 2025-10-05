@@ -21,7 +21,7 @@ def init(client):
 
         try:
             response = ai_client.chat.completions.create(
-                model="gpt-4",
+                model="gpt-4o-mini",
                 messages=[
                     {"role": "system", "content": "You are a translation assistant."},
                     {"role": "user", "content": f"Translate this text to English:\n{text_to_translate}"}
