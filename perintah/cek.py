@@ -335,9 +335,7 @@ def init(client):
             pass
 
         # Compose final strings
-        out_text = "```"
-' + '\n'.join(lines) + '\n```
-'
+        out_text = "```" + "\n".join(lines) + "\n```"
         # Also prepare txt file
         txt_content = '\n'.join(lines)
 
