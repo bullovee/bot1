@@ -7,4 +7,5 @@ pyrogram
 tgcrypto
 openai
 cryptography
+qrcode[pil]
 
