@@ -215,16 +215,6 @@ async def mulai_buat(client, event, session, auto_count):
                 pass
 
 
-# 📌 .restart
-    @client.on(events.NewMessage(pattern=r"^\.restart$"))
-    async def handler_restart(event):
-        if event.sender_id != OWNER_ID:
-            return
-        await event.edit("♻️ Bot sedang restart...")
-        args = [sys.executable] + sys.argv
-        os.execv(sys.executable, args)
-
-
 # Panggil fungsi ini di bot.py setelah client dibuat
 def init(client):
     register_commands(client)
