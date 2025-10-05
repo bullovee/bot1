@@ -62,12 +62,29 @@ def init(client):
                         },
                         {
                             "role": "user",
-                            "content": f"Detect the language of this text and translate it to Indonesian. Respond in JSON with keys: detected_language_name, detected_language_code, translated_text.\n\nText:\n{original_text}"
+                            "content": (
+                                "Detect the language of this text and translate it to Indonesian. "
+                                "Respond ONLY in valid JSON with keys: detected_language_name, detected_language_code, translated_text. "
+                                "Do not include any other text. If unsure, return an empty JSON object {}.\n\n"
+                                f"Text:\n{original_text}"
+                            )
                         }
                     ]
                 )
 
-                data = json.loads(response.choices[0].message.content)
+                # 🛡️ Validasi respons sebelum json.loads
+                response_text = response.choices[0].message.content.strip()
+
+                if not response_text.startswith("{"):
+                    await event.reply(f"❌ Gagal translate: Respons AI tidak dalam format JSON.\n\n{response_text}")
+                    return
+
+                try:
+                    data = json.loads(response_text)
+                except json.JSONDecodeError as je:
+                    await event.reply(f"❌ Gagal parse JSON: {je}\n\n{response_text}")
+                    return
+
                 lang_name = data.get("detected_language_name", "Unknown")
                 lang_code = data.get("detected_language_code", "??").upper()
                 translated_text = data.get("translated_text", "")
@@ -77,7 +94,7 @@ def init(client):
                 reply_text = (
                     f"👤 **{nama} Said** :\n\n"
                     f"```{flag} {lang_code} : {original_text}\n"
-                    f"🇮🇩 ID : {translated_text}```\n\n" 
+                    f"🇮🇩 ID : {translated_text}```\n\n"
                     f"__Detected language {lang_name} Translation to Indonesian.__"
                 )
 
