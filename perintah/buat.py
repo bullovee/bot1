@@ -2,13 +2,49 @@ import asyncio
 import random
 import time
 import traceback
-from datetime import datetime
+import locale
+from datetime import datetime, timedelta, timezone
 from telethon import events
 from telethon.tl.functions.channels import CreateChannelRequest
 from telethon.tl.functions.messages import CreateChatRequest, ExportChatInviteRequest
 from telethon.errors import FloodWaitError
 
 from .random_messages import RANDOM_MESSAGES  # pastikan file ini ada
+
+# Set locale ke Indonesia (kalau tersedia di sistem)
+try:
+    locale.setlocale(locale.LC_TIME, "id_ID.UTF-8")
+except locale.Error:
+    # Fallback manual kalau locale tidak tersedia (Windows sering tidak ada)
+    pass
+
+# Manual mapping nama hari & bulan Indonesia
+HARI_ID = {
+    "Monday": "Senin",
+    "Tuesday": "Selasa",
+    "Wednesday": "Rabu",
+    "Thursday": "Kamis",
+    "Friday": "Jumat",
+    "Saturday": "Sabtu",
+    "Sunday": "Minggu",
+}
+BULAN_ID = {
+    1: "Januari",
+    2: "Februari",
+    3: "Maret",
+    4: "April",
+    5: "Mei",
+    6: "Juni",
+    7: "Juli",
+    8: "Agustus",
+    9: "September",
+    10: "Oktober",
+    11: "November",
+    12: "Desember",
+}
+
+# Zona waktu Indonesia (WIB = UTC+7)
+WIB = timezone(timedelta(hours=7))
 
 OWNER_ID = None
 buat_sessions = {}  # simpan sementara session interaktif
@@ -26,8 +62,16 @@ def progress_bar(current, total, length=20):
     return f"[{bar}] {current}/{total}"
 
 
+# === OWNER INIT (agar OWNER_ID otomatis terisi) ===
+async def init_owner(client):
+    global OWNER_ID
+    me = await client.get_me()
+    OWNER_ID = me.id
+    print(f"ℹ️ [BUAT] OWNER_ID otomatis diset ke: {OWNER_ID} ({me.username or me.first_name})")
+
+
 # === REGISTER COMMANDS BUAT ===
-def init_buat(client):
+def init(client):
 
     print("✅ Modul BUAT dimuat...")
 
@@ -90,10 +134,7 @@ def init_buat(client):
                 try:
                     count = int(event.raw_text.strip())
                     print(f"🔢 Jumlah pesan otomatis: {count}")
-                    if count < 1:
-                        count = 1
-                    elif count > 10:
-                        count = 10
+                    count = max(1, min(count, 10))
                     session["auto_count"] = count
                     await mulai_buat(client, event, session, count)
                     del buat_sessions[event.sender_id]
@@ -168,17 +209,17 @@ async def mulai_buat(client, event, session, auto_count):
         hasil.append(f"❌ Error global: {str(e)}")
         log_error("mulai_buat", e)
 
-    # Waktu lokal Indonesia
-    now = datetime.now()
-    hari = now.strftime("%A")
+    # 🕒 Waktu lokal Indonesia (WIB)
+    now = datetime.now(WIB)
+    hari = HARI_ID[now.strftime("%A")]
+    tanggal = f"{now.day} {BULAN_ID[now.month]} {now.year}"
     jam = now.strftime("%H:%M:%S")
-    tanggal = now.strftime("%d %B %Y")
 
     detail = (
         "```\n"
         f"🕒 Detail:\n"
-        f"- jumlah berhasil di buat : {sukses}\n"
-        f"- jumlah gagal di buat    : {gagal}\n\n"
+        f"- Jumlah berhasil : {sukses}\n"
+        f"- Jumlah gagal    : {gagal}\n\n"
         f"- Hari   : {hari}\n"
         f"- Jam    : {jam} WIB\n"
         f"- Tanggal: {tanggal}\n"
@@ -190,10 +231,18 @@ async def mulai_buat(client, event, session, auto_count):
         link_preview=False
     )
 
-    # hapus pertanyaan interaktif
+    # Hapus pertanyaan interaktif
     for tanya_msg in (session.get("tanya_msg"), session.get("tanya_msg2")):
         if tanya_msg:
             try:
                 await tanya_msg.delete()
             except Exception as e:
                 log_error("hapus pesan interaktif", e)
+# === HELP MENU BUAT ===
+HELP = {
+    "buat": [
+        ".buat (b|g|c) [jumlah] [nama] → Buat grup/channel otomatis",
+        "  b = basic group, g = supergroup, c = channel",
+        "  contoh: .buat g 3 GrupTes"
+    ]
+}
