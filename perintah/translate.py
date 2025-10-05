@@ -75,12 +75,10 @@ def init(client):
                 flag = FLAG_MAP.get(lang_code, "🏳️")
 
                 reply_text = (
-                    f"👤 **{nama} Said** :\n"
-                    f"────────────\n"
-                    f"{flag} {lang_code} : {original_text}\n"
-                    f"🇮🇩 ID : {translated_text}\n"
-                    f"────────────\n"
-                    f"_Detected language {lang_name} Translation to Indonesian._"
+                    f"👤 **{nama} Said** :\n\n"
+                    f"```{flag} {lang_code} : {original_text}\n"
+                    f"🇮🇩 ID : {translated_text}```\n\n" 
+                    f"__Detected language {lang_name} Translation to Indonesian.__"
                 )
 
                 await event.reply(reply_text)
