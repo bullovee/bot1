@@ -11,7 +11,7 @@ logging.basicConfig(
 )
 
 API_ID = int(os.getenv("API_ID"))
-API_HASH = os.getenv("API_HASH"))
+API_HASH = os.getenv("API_HASH")
 SESSION = os.getenv("SESSION")
 
 logging.info("🔍 Cek token dari .addbot ...")
