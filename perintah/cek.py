@@ -1,40 +1,25 @@
-"""
-userinfo.py
-Perintah: .cek
-Deskripsi: Cek info lengkap untuk user / grup / channel.
-Cara pakai:
- - .cek (reply ke pesan user)  -> edit pesan perintah dengan info
- - .cek <id|@username>         -> edit pesan perintah dengan info
-
-Catatan:
- - Dijalankan sebagai modul Telethon userbot (init(client) dipanggil oleh loader)
- - Beberapa field memerlukan hak akses atau tidak tersedia tergantung privasi target
- - Field yang tidak tersedia ditampilkan sebagai '❌'
-
-"""
+# cek.py
+# Perintah: .cek
+# Compatible with Telethon userbot (register(client) style)
+# Place inside your modules/perintah folder and restart userbot.
 
 import re
 import os
-import math
-import json
-import asyncio
 from datetime import datetime
 from telethon import events
 from telethon.tl.functions.users import GetFullUserRequest
 from telethon.tl.functions.channels import GetFullChannelRequest
 from telethon.tl.functions.messages import GetFullChatRequest
 from telethon.tl.functions.photos import GetUserPhotosRequest
-from telethon.tl.types import User, Channel, Chat, MessageMediaGeo
+from telethon.tl.types import User, Channel, Chat
 
-# HELP entry (loader akan menggabungkan ke help global jika ada mekanisme tersebut)
 HELP = {
-    "userinfo": [
-        ".cek (reply) -> Tampilkan info lengkap user dari pesan yang direply",
-        ".cek <id|@username> -> Tampilkan info lengkap berdasarkan id/username",
+    "utility": [
+        ".cek (balas pesan / id / @username) -> Tampilkan info lengkap User / Group / Channel",
     ]
 }
 
-# Peta kode negara sederhana (extendable)
+# Simple country prefix map (extendable)
 COUNTRY_PREFIXES = {
     '62': ('Indonesia', '🇮🇩'),
     '1': ('United States/Canada', '🇺🇸'),
@@ -50,200 +35,184 @@ COUNTRY_PREFIXES = {
     '63': ('Philippines', '🇵🇭'),
     '60': ('Malaysia', '🇲🇾'),
     '66': ('Thailand', '🇹🇭'),
+    # add more prefixes as needed
 }
 
-# Utility helpers
-
-def safe(value):
-    """Return a human-readable value or ❌"""
-    if value is None or value == "" or (isinstance(value, (list, dict)) and len(value) == 0):
-        return '❌'
-    return value
-
+def safe(v):
+    if v is None or v == "" or (isinstance(v, (list, dict)) and len(v) == 0):
+        return "❌"
+    return v
 
 def detect_country_from_phone(phone: str):
-    """Return (country_name, emoji) or (None, None)"""
     if not phone:
         return (None, None)
-    phone = phone.lstrip('+')
-    # try longest prefix first
+    phone = phone.lstrip("+")
+    # try longest prefix first (3,2,1)
     for length in range(3, 0, -1):
         prefix = phone[:length]
         if prefix in COUNTRY_PREFIXES:
             return COUNTRY_PREFIXES[prefix]
     return (None, None)
 
-
-def format_bool_flag(flag):
-    if flag is None:
-        return '❌'
-    return '✅' if flag else '❌'
-
-
-def format_datetime(ts):
-    if not ts:
-        return '❌'
+def fmt_dt(ts):
+    if ts is None:
+        return "❌"
     if isinstance(ts, datetime):
-        return ts.strftime('%d %b %Y %H:%M:%S')
+        return ts.strftime("%d %b %Y %H:%M:%S")
     try:
-        return datetime.fromtimestamp(int(ts)).strftime('%d %b %Y %H:%M:%S')
+        return datetime.fromtimestamp(int(ts)).strftime("%d %b %Y %H:%M:%S")
     except Exception:
         return str(ts)
 
-
-# Main init function used by many userbot loaders
-
-def init(client):
-    print('✅ Modul USERINFO (.cek) dimuat...')
+def register(client):
+    print("✅ Modul CEK (.cek) dimuat...")
 
     @client.on(events.NewMessage(pattern=r"^\.cek(?: |$)(.*)"))
     async def handler_cek(event):
         arg = event.pattern_match.group(1).strip()
 
-        # Determine target: arg, reply to message, or error
+        # Resolve target: arg -> reply message content -> reply sender id
         target = None
         if arg:
             target = arg
         elif event.is_reply:
-            reply_msg = await event.get_reply_message()
-            # If reply contains text id or username, prefer that; else use sender_id
-            if reply_msg and reply_msg.text:
-                txt = reply_msg.text.strip()
-                # try to extract pattern like -100123... or 123456 or @username
-                m = re.search(r"(-?100\d{5,}|\d{5,}|@\w+)", txt)
-                if m:
-                    target = m.group(0)
-                else:
-                    # fallback to sender id
-                    if reply_msg.sender_id:
-                        target = str(reply_msg.sender_id)
+            reply = await event.get_reply_message()
+            if not reply:
+                await event.edit("⚠️ Tidak ada pesan yang direply.")
+                return
+            # try extract id or username inside reply text
+            txt = reply.text or ""
+            m = re.search(r"(-?100\d{5,}|\d{5,}|@[\w\d_]+)", txt)
+            if m:
+                target = m.group(0)
             else:
-                if reply_msg and reply_msg.sender_id:
-                    target = str(reply_msg.sender_id)
-
-        if not target:
-            await event.edit('⚠️ Berikan ID / username atau reply ke pesan user yang ingin dicek.')
+                # fallback to sender id
+                if reply.sender_id:
+                    target = str(reply.sender_id)
+                else:
+                    await event.edit("⚠️ Tidak dapat menentukan target dari pesan yang direply.")
+                    return
+        else:
+            await event.edit("⚠️ Berikan ID / @username atau reply pesan user/channel.")
             return
 
-        # Try to resolve entity
+        # Try to get entity safely
         try:
-            # allow numeric ids and -100... channel ids and @usernames
-            if isinstance(target, str) and target.lstrip('-').isdigit():
+            # numeric id or -100 channel id
+            if isinstance(target, str) and target.lstrip("-").isdigit():
                 ent = await client.get_entity(int(target))
             else:
                 ent = await client.get_entity(target)
         except Exception as e:
-            await event.edit(f'❌ Gagal mengambil entity: `{e}`')
+            # entity might not be discoverable due to privacy or never interacted
+            await event.edit(f"❌ Gagal mengambil entity: {e}\n\n"
+                             "Kemungkinan: target belum pernah berinteraksi dengan akun ini, "
+                             "atau username/ID salah, atau privasi ketat.")
             return
 
-        # Prepare storage for many fields
+        # collect fields
         fields = {}
+        fields['id'] = getattr(ent, "id", None)
+        fields['access_hash'] = getattr(ent, "access_hash", None)
+        fields['username'] = getattr(ent, "username", None)
+        fields['first_name'] = getattr(ent, "first_name", None)
+        fields['last_name'] = getattr(ent, "last_name", None)
+        fields['title'] = getattr(ent, "title", None)
 
-        # Common fields
-        fields['id'] = getattr(ent, 'id', None)
-        fields['access_hash'] = getattr(ent, 'access_hash', None)
-        fields['username'] = getattr(ent, 'username', None)
-        # name: user has first_name, channel has title
-        fields['first_name'] = getattr(ent, 'first_name', None)
-        fields['last_name'] = getattr(ent, 'last_name', None)
-        fields['title'] = getattr(ent, 'title', None)
-        fields['is_bot'] = getattr(ent, 'bot', False) if hasattr(ent, 'bot') else False
-        fields['is_channel'] = isinstance(ent, Channel)
-        fields['is_chat'] = isinstance(ent, Chat)
+        # defaults
+        fields['phone'] = None
+        fields['lang_code'] = None
+        fields['about'] = None
+        fields['profile_photos_count'] = None
+        fields['is_deleted'] = False
+        fields['is_verified'] = False
+        fields['is_scam'] = False
+        fields['is_fake'] = False
+        fields['is_premium'] = False
+        fields['mutual_contact'] = False
+        fields['is_support'] = False
+        fields['dc_id'] = None
+        fields['status'] = None
+        fields['was_online'] = None
+        fields['bot_info_version'] = None
+        fields['broadcast'] = False
+        fields['megagroup'] = False
+        fields['participants_count'] = None
+        fields['about_channel'] = None
+        fields['location'] = None
 
-        # Try to fetch fuller data depending on type
-        full_user = None
-        full_channel = None
-        full_chat = None
-
+        # Try get fuller objects depending on type
         try:
             if isinstance(ent, User):
                 full = await client(GetFullUserRequest(ent.id))
-                full_user = full
-                # base user object
                 u = full.user
                 fu = full.full_user
                 fields['phone'] = getattr(u, 'phone', None)
                 fields['lang_code'] = getattr(u, 'lang_code', None)
                 fields['about'] = getattr(fu, 'about', None) if fu else None
-                fields['profile_photos'] = None
+                # profile photos count
                 try:
                     photos = await client(GetUserPhotosRequest(user_id=ent.id, offset=0, max_id=0, limit=1))
-                    fields['profile_photos'] = photos.count if hasattr(photos, 'count') else None
+                    fields['profile_photos_count'] = photos.count if hasattr(photos, 'count') else None
                 except Exception:
-                    fields['profile_photos'] = None
+                    fields['profile_photos_count'] = None
 
-                # flags
                 fields['is_deleted'] = getattr(u, 'deleted', False)
                 fields['is_verified'] = getattr(u, 'verified', False)
                 fields['is_scam'] = getattr(u, 'scam', False)
                 fields['is_fake'] = getattr(u, 'fake', False)
                 fields['is_premium'] = getattr(u, 'premium', False)
                 fields['mutual_contact'] = getattr(u, 'mutual_contact', False)
-                # status
-                try:
-                    status = getattr(u, 'status', None)
-                    if status is None:
-                        fields['status'] = None
-                    else:
-                        fields['status'] = type(status).__name__
-                        # try extract was_online if present
-                        was_online = getattr(status, 'was_online', None)
-                        fields['was_online'] = was_online
-                except Exception:
-                    fields['status'] = None
-
-                # business & other optional
-                fields['bot_info'] = getattr(u, 'bot_info_version', None)
                 fields['is_support'] = getattr(u, 'support', False)
                 fields['dc_id'] = getattr(u, 'dc_id', None)
+                # status
+                status = getattr(u, 'status', None)
+                if status is None:
+                    fields['status'] = None
+                else:
+                    fields['status'] = type(status).__name__
+                    fields['was_online'] = getattr(status, 'was_online', None)
+                fields['bot_info_version'] = getattr(u, 'bot_info_version', None)
 
             elif isinstance(ent, Channel):
-                # Channel or supergroup
+                # Channel / supergroup
                 try:
                     full_ch = await client(GetFullChannelRequest(ent))
-                    full_channel = full_ch
-                    ch = full_ch.chats[0] if full_ch.chats else ent
-                    # many fields available in full_ch
-                    fields['title'] = getattr(ch, 'title', None)
-                    fields['about'] = getattr(full_ch, 'about', None)
-                    fields['participants_count'] = getattr(full_ch, 'participant_count', None) or getattr(full_ch, 'participants_count', None) or None
-                    # flags
+                    # full_ch may contain .chats and .full_chat/full_channel
+                    fields['title'] = getattr(ent, 'title', None)
+                    fields['about_channel'] = getattr(full_ch, 'about', None)
+                    # participants count
+                    pc = getattr(full_ch, 'participants_count', None) or getattr(full_ch, 'participants_count', None)
+                    fields['participants_count'] = pc
                     fields['broadcast'] = getattr(ent, 'broadcast', False)
                     fields['megagroup'] = getattr(ent, 'megagroup', False)
                     fields['verified'] = getattr(ent, 'verified', False)
                     fields['scam'] = getattr(ent, 'scam', False)
                     fields['fake'] = getattr(ent, 'fake', False)
-                    # location if present
+                    # location
                     try:
                         loc = getattr(full_ch, 'location', None)
                         if loc:
                             fields['location'] = getattr(loc, 'address', None) or str(loc)
-                        else:
-                            fields['location'] = None
                     except Exception:
                         fields['location'] = None
                 except Exception:
-                    # fallback to basic channel
+                    # partial fallback
                     fields['title'] = getattr(ent, 'title', None)
-                    fields['about'] = None
 
             elif isinstance(ent, Chat):
-                # basic group
                 try:
-                    full_c = await client(GetFullChatRequest(ent.id))
-                    full_chat = full_c
+                    full_chat = await client(GetFullChatRequest(ent.id))
                     fields['title'] = getattr(ent, 'title', None)
-                    # try participants
-                    fields['participants_count'] = getattr(full_c, 'participants_count', None)
+                    fields['participants_count'] = getattr(full_chat, 'participants_count', None)
                 except Exception:
                     fields['title'] = getattr(ent, 'title', None)
 
-        except Exception as e:
-            # non-fatal
+        except Exception:
+            # non-fatal, continue with what we have
             pass
 
-        # Country detection from phone if available
+        # detect country from phone
         country_name, country_emoji = (None, None)
         if fields.get('phone'):
             cname, cemoji = detect_country_from_phone(str(fields['phone']))
@@ -252,107 +221,124 @@ def init(client):
         else:
             fields['country'] = None
 
-        # Heuristics: popularity / famous detection
-        popularity_score = 0
+        # heuristics popularity
+        popularity = 0
         try:
             if fields.get('is_verified'):
-                popularity_score += 50
-            # username short
+                popularity += 50
             uname = fields.get('username')
             if uname and len(uname) <= 5:
-                popularity_score += 20
-            # many photos
-            pp = fields.get('profile_photos')
+                popularity += 20
+            pp = fields.get('profile_photos_count')
             if pp and pp >= 5:
-                popularity_score += 10
-            # mutual contacts and premium
+                popularity += 10
             if fields.get('mutual_contact'):
-                popularity_score += 5
+                popularity += 5
             if fields.get('is_premium'):
-                popularity_score += 5
+                popularity += 5
         except Exception:
             pass
 
-        fields['popularity_score'] = popularity_score
-        fields['is_famous'] = True if popularity_score >= 40 else False
+        fields['popularity_score'] = popularity
+        fields['is_famous'] = True if popularity >= 40 else False
 
-        # Build output text (very detailed)
+        # build lines
         lines = []
-        def L(label, key):
-            lines.append(f"{label}: {safe(fields.get(key))}")
-
-        lines.append('📊 USERINFO DETAIL')
-        lines.append('────────────────────────────────────────')
-        L('ID', 'id')
-        L('Access Hash', 'access_hash')
-        L('Username', 'username')
-        # name variants
-        if fields.get('title'):
-            L('Title', 'title')
+        lines.append("📊 USERINFO DETAIL")
+        lines.append("────────────────────────────────────────")
+        lines.append(f"ID: {safe(fields.get('id'))}")
+        lines.append(f"Access Hash: {safe(fields.get('access_hash'))}")
+        lines.append(f"Username: {safe(fields.get('username'))}")
+        # name / title
+        if safe(fields.get('title')) != "❌":
+            lines.append(f"Title: {safe(fields.get('title'))}")
         else:
-            L('First Name', 'first_name')
-            L('Last Name', 'last_name')
-        L('Phone', 'phone')
-        L('Country', 'country')
-        L('Language Code', 'lang_code')
-        L('Bio/About', 'about')
-        L('Profile Photos Count', 'profile_photos')
-        L('Is Bot', 'is_bot')
-        L('Is Deleted', 'is_deleted')
-        L('Is Verified', 'is_verified')
-        L('Is Scam', 'is_scam')
-        L('Is Fake', 'is_fake')
-        L('Is Premium', 'is_premium')
-        L('Is Support', 'is_support')
-        L('Mutual Contact', 'mutual_contact')
-        L('DC ID', 'dc_id')
-        L('Status', 'status')
-        L('Was Online', 'was_online')
-        L('Bot Info Version', 'bot_info')
-        L('Popularity Score', 'popularity_score')
-        L('Is Famous', 'is_famous')
+            lines.append(f"First Name: {safe(fields.get('first_name'))}")
+            lines.append(f"Last Name: {safe(fields.get('last_name'))}")
+        lines.append(f"Phone: {safe(fields.get('phone'))}")
+        lines.append(f"Country: {safe(fields.get('country'))}")
+        lines.append(f"Language Code: {safe(fields.get('lang_code'))}")
+        lines.append(f"Bio/About: {safe(fields.get('about'))}")
+        lines.append(f"Profile Photos Count: {safe(fields.get('profile_photos_count'))}")
+        lines.append(f"Is Bot: {safe(getattr(ent, 'bot', False))}")
+        lines.append(f"Is Deleted: {safe(fields.get('is_deleted'))}")
+        lines.append(f"Is Verified: {safe(fields.get('is_verified'))}")
+        lines.append(f"Is Scam: {safe(fields.get('is_scam'))}")
+        lines.append(f"Is Fake: {safe(fields.get('is_fake'))}")
+        lines.append(f"Is Premium: {safe(fields.get('is_premium'))}")
+        lines.append(f"Is Support: {safe(fields.get('is_support'))}")
+        lines.append(f"Mutual Contact: {safe(fields.get('mutual_contact'))}")
+        lines.append(f"DC ID: {safe(fields.get('dc_id'))}")
+        lines.append(f"Status: {safe(fields.get('status'))}")
+        lines.append(f"Was Online: {fmt_dt(fields.get('was_online'))}")
+        lines.append(f"Bot Info Version: {safe(fields.get('bot_info_version'))}")
+        lines.append(f"Popularity Score: {safe(fields.get('popularity_score'))}")
+        lines.append(f"Is Famous: {safe(fields.get('is_famous'))}")
 
-        # Channel/group extras
         if isinstance(ent, Channel) or isinstance(ent, Chat):
-            lines.append('\n📢 CHANNEL / GROUP INFO')
-            lines.append('────────────────────────────────────────')
-            L('Title', 'title')
-            L('About', 'about')
-            L('Participants Count', 'participants_count')
-            L('Broadcast', 'broadcast')
-            L('Megagroup', 'megagroup')
-            L('Verified', 'verified')
-            L('Scam', 'scam')
-            L('Fake', 'fake')
-            L('Location', 'location')
+            lines.append("")
+            lines.append("📢 CHANNEL / GROUP INFO")
+            lines.append("────────────────────────────────────────")
+            lines.append(f"Title: {safe(fields.get('title'))}")
+            lines.append(f"About: {safe(fields.get('about_channel'))}")
+            lines.append(f"Participants Count: {safe(fields.get('participants_count'))}")
+            lines.append(f"Broadcast: {safe(fields.get('broadcast'))}")
+            lines.append(f"Megagroup: {safe(fields.get('megagroup'))}")
+            lines.append(f"Verified: {safe(fields.get('verified'))}")
+            lines.append(f"Scam: {safe(fields.get('scam'))}")
+            lines.append(f"Fake: {safe(fields.get('fake'))}")
+            lines.append(f"Location: {safe(fields.get('location'))}")
 
-        # Fallback: include raw entity repr for debugging
+        # raw entity for debugging
         try:
-            raw = repr(ent)
-            lines.append('\n┄ Raw Entity ┄')
-            lines.append(raw)
+            lines.append("")
+            lines.append("┄ Raw Entity ┄")
+            lines.append(repr(ent))
         except Exception:
             pass
 
-        # Compose final strings
+        # compose outputs
         out_text = "```" + "\n".join(lines) + "\n```"
-        # Also prepare txt file
-        txt_content = '\n'.join(lines)
+        txt_content = "\n".join(lines)
 
-        # Edit original command message with result
+        # edit original message with result
         try:
-            # Edit message (user requested edit mode)
             await event.edit(out_text)
-        except Exception as e:
-            # Fallback to reply
+        except Exception:
+            # fallback to reply
             await event.reply(out_text)
 
-        # Save txt file and send
-        fname = f"userinfo_{fields.get('id', 'unknown')}.txt"
+        # send profile photo if available (user) or chat photo (channel)
         try:
-            with open(fname, 'w', encoding='utf-8') as f:
+            # for users
+            if isinstance(ent, User):
+                if fields.get('profile_photos_count') and fields['profile_photos_count'] and fields['profile_photos_count'] > 0:
+                    try:
+                        # download best profile photo
+                        file_photo = await client.download_profile_photo(ent, file=f"profile_{ent.id}.jpg")
+                        if file_photo:
+                            await client.send_file(event.chat_id, file_photo, caption=f"Photo profile: {safe(fields.get('username'))}")
+                            os.remove(file_photo)
+                    except Exception:
+                        pass
+            else:
+                # channel chat photo (attempt)
+                try:
+                    file_photo = await client.download_profile_photo(ent, file=f"profile_{fields.get('id')}.jpg")
+                    if file_photo:
+                        await client.send_file(event.chat_id, file_photo, caption=f"Photo: {safe(fields.get('title') or fields.get('username'))}")
+                        os.remove(file_photo)
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+        # create txt file and send
+        fname = f"userinfo_{fields.get('id','unknown')}.txt"
+        try:
+            with open(fname, "w", encoding="utf-8") as f:
                 f.write(txt_content)
-            await event.client.send_file(event.chat_id, fname, caption=f"Userinfo: {fields.get('id')}")
+            await client.send_file(event.chat_id, fname, caption=f"Userinfo: {safe(fields.get('id'))}")
         except Exception:
             pass
         finally:
@@ -363,5 +349,3 @@ def init(client):
                 pass
 
     # end handler
-
-# end init
