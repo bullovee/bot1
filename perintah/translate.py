@@ -117,7 +117,7 @@ Text:
 
         # ⚠️ Tidak ada teks & tidak reply
         await event.reply("⚠️ Gunakan `.tr <teks>` atau balas pesan dengan `.tr`.")
-ke HELP global lewat __init__.py
+#ke HELP global lewat __init__.py
 HELP = {
     "utility": [
         ".tr <teks> → Translate otomatis ke Bahasa Inggris 🌐",
