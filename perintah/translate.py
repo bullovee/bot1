@@ -52,6 +52,8 @@ def init(client):
             sender = await reply_msg.get_sender()
             nama = sender.first_name or sender.username or "Unknown"
 
+            await event.delete()
+
             try:
                 response = ai_client.chat.completions.create(
                     model="gpt-4o-mini",
