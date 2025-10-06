@@ -280,7 +280,7 @@ async def mulai_buat(client, event, session, auto_count):
     now = datetime.now(WIB)
     hari = HARI_ID[now.strftime("%A")]
     tanggal_full = f"{now.day} {BULAN_ID[now.month]} {now.year}"
-    tanggal_key = now.strftime("%d/%m/%y')
+    tanggal_key = now.strftime("%d/%m/%y")
     jam = now.strftime("%H:%M:%S")
 
     # edit pesan hasil (pesan 1)
