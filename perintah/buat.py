@@ -295,18 +295,18 @@ async def mulai_buat(client, event, session, auto_count):
         await upload_rekap_to_channel(client)
 
         # Pesan laporan total
-        lines = ["🎉 Total Grup/Channel dibuat :"]
+        lines = ["**‼️ Total Grubs and channels created ‼️**"]
         total_grup = 0
         total_channel = 0
         for t, v in sorted(data[owner_key].items()):
             g = v.get("grup", 0)
             c = v.get("channel", 0)
-            lines.append(f"⏺️Tanggal {t} Total --> {g} Grup / {c} Channel")
+            lines.append(f"```- {t} Total : {g} Grup / {c} Channel```")
             total_grup += g
             total_channel += c
 
         lines.append("")
-        lines.append(f"☑️Total Bot berhasil membuat grub : {total_grup} Grup / {total_channel} Channel")
+        lines.append(f"```Total  keseluruhan : {total_grup} Grup / {total_channel} Channel```")
 
         await event.respond("\n".join(lines))
     except Exception as e:
