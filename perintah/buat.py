@@ -38,8 +38,8 @@ WIB = timezone(timedelta(hours=7))
 OWNER_ID = None
 buat_sessions = {}
 
-# Config backup channel & local rekap file
-BACKUP_CHANNEL_ID = -1002933104000  # channel backup yang kamu pilih
+# Config backup channel & local rekap file (ganti kalau perlu)
+BACKUP_CHANNEL_ID = -1002933104000
 REKAP_FILE = "rekap.json"
 
 def log_error(context: str, e: Exception):
@@ -51,13 +51,12 @@ def progress_bar(current, total, length=20):
     bar = "█" * filled + "▒" * (length - filled)
     return f"[{bar}] {current}/{total}"
 
-# ------------------ Auto-restore rekap.json ------------------
+# ------------------ Auto-restore rekap.json (download from channel if exists) ------------------
 async def auto_restore_rekap(client):
     """
-    Saat bot start, fungsi ini akan:
-    - Jika REKAP_FILE ada secara lokal -> lakukan nothing
-    - Else: coba download dari BACKUP_CHANNEL_ID jika ada file bernama rekap.json
-    - Jika tidak ada di channel -> buat file kosong {}
+    On startup: if local REKAP_FILE exists -> nothing.
+    Else: try to download from BACKUP_CHANNEL_ID any file named rekap.json.
+    If not found, create empty local rekap.json.
     """
     try:
         if os.path.exists(REKAP_FILE):
@@ -71,17 +70,81 @@ async def auto_restore_rekap(client):
                 print("✅ rekap.json berhasil di-restore dari channel.")
                 return
 
-        # tidak ditemukan => buat file kosong
+        # not found -> create empty
         print("⚠️ rekap.json tidak ditemukan di channel — membuat file kosong lokal...")
         with open(REKAP_FILE, "w", encoding="utf-8") as f:
             json.dump({}, f)
         print("✅ rekap.json kosong berhasil dibuat.")
     except Exception as e:
         print(f"❌ Gagal auto-restore rekap.json: {e}")
-        # fallback: buat file kosong
         if not os.path.exists(REKAP_FILE):
             with open(REKAP_FILE, "w", encoding="utf-8") as f:
                 json.dump({}, f)
+
+# ------------------ Upload/Merge rekap.json to channel ------------------
+async def upload_rekap_to_channel(client):
+    """
+    Upload the local rekap.json to the backup channel in a multi-bot friendly way:
+    - Download existing remote rekap.json (if any)
+    - Replace the entry for this OWNER_ID with the local OWNER data (so each bot manages its owner section)
+    - Upload the merged file, after deleting previous uploaded rekap.json messages
+    """
+    try:
+        # load local data (may contain only this owner's data or merged)
+        try:
+            with open(REKAP_FILE, "r", encoding="utf-8") as f:
+                local_data = json.load(f)
+        except Exception:
+            local_data = {}
+
+        owner_key = str(OWNER_ID)
+
+        # download remote if exists
+        remote_data = {}
+        async for msg in client.iter_messages(BACKUP_CHANNEL_ID, limit=20):
+            if msg.file and getattr(msg.file, "name", "").lower() == REKAP_FILE:
+                try:
+                    # download to temp file
+                    tmp = REKAP_FILE + ".remote"
+                    await client.download_media(msg, file=tmp)
+                    with open(tmp, "r", encoding="utf-8") as rf:
+                        remote_data = json.load(rf)
+                    os.remove(tmp)
+                except Exception:
+                    remote_data = {}
+                break
+
+        # Ensure structures
+        if not isinstance(local_data, dict):
+            local_data = {}
+        if not isinstance(remote_data, dict):
+            remote_data = {}
+
+        # Replace remote_data[owner_key] with local_data[owner_key] if present,
+        # otherwise keep remote's owner data untouched.
+        if owner_key in local_data:
+            remote_data[owner_key] = local_data[owner_key]
+        else:
+            # if local has no owner section, ensure remote still has it (do nothing)
+            pass
+
+        # Save merged file locally
+        with open(REKAP_FILE, "w", encoding="utf-8") as f:
+            json.dump(remote_data, f, indent=2, ensure_ascii=False)
+
+        # Delete old remote messages containing rekap.json (to avoid duplicates)
+        try:
+            async for msg in client.iter_messages(BACKUP_CHANNEL_ID, limit=50):
+                if msg.file and getattr(msg.file, "name", "").lower() == REKAP_FILE:
+                    await msg.delete()
+            # Upload merged file
+            await client.send_file(BACKUP_CHANNEL_ID, REKAP_FILE, caption="📊 rekap.json (merged)")
+            print("☁️ rekap.json berhasil diupload ke channel backup.")
+        except Exception as e:
+            print(f"❌ Gagal meng-upload rekap.json: {e}")
+
+    except Exception as e:
+        log_error("upload_rekap_to_channel", e)
 
 # ------------------ OWNER INIT ------------------
 async def init_owner(client):
@@ -217,7 +280,7 @@ async def mulai_buat(client, event, session, auto_count):
     now = datetime.now(WIB)
     hari = HARI_ID[now.strftime("%A")]
     tanggal_full = f"{now.day} {BULAN_ID[now.month]} {now.year}"
-    tanggal_key = now.strftime("%d/%m/%y")
+    tanggal_key = now.strftime("%d/%m/%y')
     jam = now.strftime("%H:%M:%S")
 
     # edit pesan hasil (pesan 1)
