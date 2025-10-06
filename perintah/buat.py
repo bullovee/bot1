@@ -38,7 +38,7 @@ WIB = timezone(timedelta(hours=7))
 OWNER_ID = None
 buat_sessions = {}
 
-# Config backup channel & local rekap file (ganti kalau perlu)
+# Config backup channel & local rekap file
 BACKUP_CHANNEL_ID = -1002933104000
 REKAP_FILE = "rekap.json"
 
@@ -53,11 +53,6 @@ def progress_bar(current, total, length=20):
 
 # ------------------ Auto-restore rekap.json (download from channel if exists) ------------------
 async def auto_restore_rekap(client):
-    """
-    On startup: if local REKAP_FILE exists -> nothing.
-    Else: try to download from BACKUP_CHANNEL_ID any file named rekap.json.
-    If not found, create empty local rekap.json.
-    """
     try:
         if os.path.exists(REKAP_FILE):
             print("📂 rekap.json lokal sudah ada — tidak perlu restore.")
@@ -83,14 +78,7 @@ async def auto_restore_rekap(client):
 
 # ------------------ Upload/Merge rekap.json to channel ------------------
 async def upload_rekap_to_channel(client):
-    """
-    Upload the local rekap.json to the backup channel in a multi-bot friendly way:
-    - Download existing remote rekap.json (if any)
-    - Replace the entry for this OWNER_ID with the local OWNER data (so each bot manages its owner section)
-    - Upload the merged file, after deleting previous uploaded rekap.json messages
-    """
     try:
-        # load local data (may contain only this owner's data or merged)
         try:
             with open(REKAP_FILE, "r", encoding="utf-8") as f:
                 local_data = json.load(f)
@@ -98,13 +86,11 @@ async def upload_rekap_to_channel(client):
             local_data = {}
 
         owner_key = str(OWNER_ID)
-
-        # download remote if exists
         remote_data = {}
+
         async for msg in client.iter_messages(BACKUP_CHANNEL_ID, limit=20):
             if msg.file and getattr(msg.file, "name", "").lower() == REKAP_FILE:
                 try:
-                    # download to temp file
                     tmp = REKAP_FILE + ".remote"
                     await client.download_media(msg, file=tmp)
                     with open(tmp, "r", encoding="utf-8") as rf:
@@ -114,35 +100,23 @@ async def upload_rekap_to_channel(client):
                     remote_data = {}
                 break
 
-        # Ensure structures
         if not isinstance(local_data, dict):
             local_data = {}
         if not isinstance(remote_data, dict):
             remote_data = {}
 
-        # Replace remote_data[owner_key] with local_data[owner_key] if present,
-        # otherwise keep remote's owner data untouched.
         if owner_key in local_data:
             remote_data[owner_key] = local_data[owner_key]
-        else:
-            # if local has no owner section, ensure remote still has it (do nothing)
-            pass
 
-        # Save merged file locally
         with open(REKAP_FILE, "w", encoding="utf-8") as f:
             json.dump(remote_data, f, indent=2, ensure_ascii=False)
 
-        # Delete old remote messages containing rekap.json (to avoid duplicates)
-        try:
-            async for msg in client.iter_messages(BACKUP_CHANNEL_ID, limit=50):
-                if msg.file and getattr(msg.file, "name", "").lower() == REKAP_FILE:
-                    await msg.delete()
-            # Upload merged file
-            await client.send_file(BACKUP_CHANNEL_ID, REKAP_FILE, caption="📊 rekap.json (merged)")
-            print("☁️ rekap.json berhasil diupload ke channel backup.")
-        except Exception as e:
-            print(f"❌ Gagal meng-upload rekap.json: {e}")
+        async for msg in client.iter_messages(BACKUP_CHANNEL_ID, limit=50):
+            if msg.file and getattr(msg.file, "name", "").lower() == REKAP_FILE:
+                await msg.delete()
 
+        await client.send_file(BACKUP_CHANNEL_ID, REKAP_FILE, caption="📊 rekap.json (merged)")
+        print("☁️ rekap.json berhasil diupload ke channel backup.")
     except Exception as e:
         log_error("upload_rekap_to_channel", e)
 
@@ -189,7 +163,6 @@ def init(client):
             session = buat_sessions[event.sender_id]
             jawaban = event.raw_text.strip().upper()
 
-            # pertama: tanya Y/N
             if "auto_msg" not in session:
                 if jawaban == "Y":
                     session["auto_msg"] = True
@@ -202,7 +175,6 @@ def init(client):
                 await event.delete()
                 return
 
-            # kedua: jumlah pesan
             if session.get("auto_msg") and "auto_count" not in session:
                 try:
                     cnt = max(1, min(int(event.raw_text.strip()), 10))
@@ -276,14 +248,12 @@ async def mulai_buat(client, event, session, auto_count):
         hasil.append(f"❌ Error global: {str(e)}")
         log_error("mulai_buat", e)
 
-    # waktu lokal
     now = datetime.now(WIB)
     hari = HARI_ID[now.strftime("%A")]
     tanggal_full = f"{now.day} {BULAN_ID[now.month]} {now.year}"
     tanggal_key = now.strftime("%d/%m/%y")
     jam = now.strftime("%H:%M:%S")
 
-    # edit pesan hasil (pesan 1)
     detail = (
         "```\n"
         f"🕒 Detail:\n"
@@ -297,7 +267,7 @@ async def mulai_buat(client, event, session, auto_count):
 
     await msg.edit("🎉 Grup/Channel selesai dibuat:\n\n" + "\n".join(hasil) + "\n\n" + detail, link_preview=False)
 
-    # simpan ke rekap.json
+    # ------------------ Simpan ke JSON ------------------
     try:
         if not os.path.exists(REKAP_FILE):
             with open(REKAP_FILE, "w", encoding="utf-8") as f:
@@ -319,9 +289,12 @@ async def mulai_buat(client, event, session, auto_count):
             data[owner_key][tanggal_key]["channel"] += sukses
 
         with open(REKAP_FILE, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2)
+            json.dump(data, f, indent=2, ensure_ascii=False)
 
-        # susun pesan 2
+        # ⬆️ Upload ke channel backup setiap selesai .buat
+        await upload_rekap_to_channel(client)
+
+        # Pesan laporan total
         lines = ["🎉 Total Grup/Channel dibuat :"]
         total_grup = 0
         total_channel = 0
@@ -336,11 +309,9 @@ async def mulai_buat(client, event, session, auto_count):
         lines.append(f"☑️Total Bot berhasil membuat grub : {total_grup} Grup / {total_channel} Channel")
 
         await event.respond("\n".join(lines))
-
     except Exception as e:
         log_error("rekap_save", e)
 
-    # hapus tanya interaktif
     for tanya_msg in (session.get("tanya_msg"), session.get("tanya_msg2")):
         if tanya_msg:
             try:
@@ -348,7 +319,6 @@ async def mulai_buat(client, event, session, auto_count):
             except Exception as e:
                 log_error("hapus tanya", e)
 
-# auto restore function (already defined above for startup usage)
 # HELP
 HELP = {
     "buat": [
