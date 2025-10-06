@@ -5,6 +5,9 @@ from telethon.sessions import StringSession
 from perintah import init as load_perintah
 from perintah.addbot import load_token
 
+# 🧠 Tambahan untuk rekap
+from perintah.buat import load_rekap_from_channel  # ✅ hanya tambahan ini
+
 logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s",
     level=logging.INFO
@@ -64,6 +67,13 @@ async def main():
         logging.info(f"🔧 Mode berjalan: {mode}")
     except Exception as e:
         logging.error(f"❌ Gagal cek mode: {e}", exc_info=True)
+
+    # 📝 Tambahan: Load rekap.json dari channel pribadi saat startup
+    try:
+        await load_rekap_from_channel(client)   # ✅ hanya tambahan ini
+        logging.info("📥 rekap.json berhasil dimuat dari channel pribadi (jika ada)")
+    except Exception as e:
+        logging.warning(f"⚠️ Gagal load rekap.json dari channel pribadi: {e}")
 
     # Load semua perintah via __init__.py
     logging.info("📂 Mulai load perintah...")
