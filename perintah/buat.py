@@ -3,20 +3,15 @@ import random
 import time
 import traceback
 import locale
-import os
 import json
+import os
 from datetime import datetime, timedelta, timezone
 from telethon import events
 from telethon.tl.functions.channels import CreateChannelRequest
 from telethon.tl.functions.messages import CreateChatRequest, ExportChatInviteRequest
 from telethon.errors import FloodWaitError
-from telethon.tl.types import DocumentAttributeFilename
 
 from .random_messages import RANDOM_MESSAGES  # pastikan file ini ada
-
-# === Konfigurasi rekap & channel backup ===
-BACKUP_CHANNEL_ID = -1002933104000  # ID channel pribadi kamu
-REKAP_FILE = "rekap.json"
 
 # Set locale ke Indonesia (kalau tersedia di sistem)
 try:
@@ -238,28 +233,43 @@ async def mulai_buat(client, event, session, auto_count):
         link_preview=False
     )
 
+    # Hapus pertanyaan interaktif
+    for tanya_msg in (session.get("tanya_msg"), session.get("tanya_msg2")):
+        if tanya_msg:
+            try:
+                await tanya_msg.delete()
+            except Exception as e:
+                log_error("hapus pesan interaktif", e)
 
-# === Auto restore atau create rekap.json saat bot start ===
-async def load_rekap_from_channel(client):
+
+# === AUTO RESTORE JSON saat startup ===
+BACKUP_CHANNEL_ID = -1002933104000  # ganti sesuai ID channel kamu
+
+async def auto_restore_rekap(client):
+    """
+    Auto-restore file rekap.json saat bot start:
+    - Kalau file ada di channel → download
+    - Kalau tidak ada → buat file kosong
+    """
     try:
+        if os.path.exists("rekap.json"):
+            print("📂 rekap.json lokal sudah ada — tidak perlu restore.")
+            return
+
         async for msg in client.iter_messages(BACKUP_CHANNEL_ID, limit=10):
-            if msg.file and msg.file.name == REKAP_FILE:
-                print(f"📥 Menemukan {REKAP_FILE} di channel, mulai restore...")
-                await client.download_media(msg, file=REKAP_FILE)
-                print(f"✅ Berhasil restore {REKAP_FILE} dari channel.")
+            if msg.file and msg.file.name == "rekap.json":
+                print("☁️ Menemukan rekap.json di channel, mulai restore...")
+                await client.download_media(msg, file="rekap.json")
+                print("✅ rekap.json berhasil di-restore dari channel.")
                 return
 
-        # Kalau tidak ditemukan file di channel, buat default baru
-        if not os.path.exists(REKAP_FILE):
-            with open(REKAP_FILE, "w") as f:
-                json.dump({}, f)
-            print(f"📝 {REKAP_FILE} tidak ditemukan di channel — file baru dibuat lokal.")
+        print("⚠️ rekap.json tidak ditemukan di channel — membuat file kosong...")
+        with open("rekap.json", "w", encoding="utf-8") as f:
+            json.dump({}, f, indent=2)
+        print("✅ File rekap.json kosong berhasil dibuat.")
 
     except Exception as e:
-        print(f"❌ Gagal load rekap dari channel: {e}")
-        if not os.path.exists(REKAP_FILE):
-            with open(REKAP_FILE, "w") as f:
-                json.dump({}, f)
+        print(f"❌ Gagal auto-restore rekap.json: {e}")
 
 
 # === HELP MENU BUAT ===
