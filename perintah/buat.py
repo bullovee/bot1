@@ -3,6 +3,8 @@ import random
 import time
 import traceback
 import locale
+import os
+import json
 from datetime import datetime, timedelta, timezone
 from telethon import events
 from telethon.tl.functions.channels import CreateChannelRequest
@@ -11,14 +13,27 @@ from telethon.errors import FloodWaitError
 
 from .random_messages import RANDOM_MESSAGES  # pastikan file ini ada
 
-# Set locale ke Indonesia (kalau tersedia di sistem)
+# 📌 ID channel pribadi untuk backup rekap.json
+PRIVATE_CHANNEL_ID = -1002933104000
+REKAP_FILE = "rekap.json"
+
+# === FUNGSI REKAP JSON ===
+def read_rekap():
+    if os.path.exists(REKAP_FILE):
+        with open(REKAP_FILE, "r") as f:
+            return json.load(f)
+    return {}
+
+def write_rekap(data):
+    with open(REKAP_FILE, "w") as f:
+        json.dump(data, f, indent=4)
+
+# === LOKALISASI WAKTU ===
 try:
     locale.setlocale(locale.LC_TIME, "id_ID.UTF-8")
 except locale.Error:
-    # Fallback manual kalau locale tidak tersedia (Windows sering tidak ada)
     pass
 
-# Manual mapping nama hari & bulan Indonesia
 HARI_ID = {
     "Monday": "Senin",
     "Tuesday": "Selasa",
@@ -43,7 +58,6 @@ BULAN_ID = {
     12: "Desember",
 }
 
-# Zona waktu Indonesia (WIB = UTC+7)
 WIB = timezone(timedelta(hours=7))
 
 OWNER_ID = None
@@ -51,7 +65,6 @@ buat_sessions = {}  # simpan sementara session interaktif
 
 
 def log_error(context: str, e: Exception):
-    """Cetak error + traceback ke console."""
     print(f"❌ ERROR di {context}: {e}")
     traceback.print_exc()
 
@@ -111,7 +124,6 @@ def init(client):
 
             session = buat_sessions[event.sender_id]
 
-            # jawaban Y/N
             if "auto_msg" not in session:
                 if event.raw_text.strip().upper() == "Y":
                     print("📝 Jawaban interaktif: Y")
@@ -129,7 +141,6 @@ def init(client):
                     await event.delete()
                     return
 
-            # jumlah pesan otomatis
             if session.get("auto_msg") and "auto_count" not in session:
                 try:
                     count = int(event.raw_text.strip())
@@ -209,7 +220,6 @@ async def mulai_buat(client, event, session, auto_count):
         hasil.append(f"❌ Error global: {str(e)}")
         log_error("mulai_buat", e)
 
-    # 🕒 Waktu lokal Indonesia (WIB)
     now = datetime.now(WIB)
     hari = HARI_ID[now.strftime("%A")]
     tanggal = f"{now.day} {BULAN_ID[now.month]} {now.year}"
@@ -231,13 +241,61 @@ async def mulai_buat(client, event, session, auto_count):
         link_preview=False
     )
 
-    # Hapus pertanyaan interaktif
     for tanya_msg in (session.get("tanya_msg"), session.get("tanya_msg2")):
         if tanya_msg:
             try:
                 await tanya_msg.delete()
             except Exception as e:
                 log_error("hapus pesan interaktif", e)
+
+    # 📝 Tambahan: Update rekap total dan kirim ke channel pribadi
+    grup_baru = sukses if jenis in ["b", "g"] else 0
+    channel_baru = sukses if jenis == "c" else 0
+    await update_rekap(client, OWNER_ID, grup_baru, channel_baru)
+
+
+# === SISTEM REKAP ===
+async def update_rekap(client, owner_id, grup_baru, channel_baru):
+    now = datetime.now(WIB)
+    tgl_str = now.strftime("%d/%m/%y")
+
+    data = read_rekap()
+    if str(owner_id) not in data:
+        data[str(owner_id)] = {}
+
+    if tgl_str not in data[str(owner_id)]:
+        data[str(owner_id)][tgl_str] = {"grup": 0, "channel": 0}
+
+    data[str(owner_id)][tgl_str]["grup"] += grup_baru
+    data[str(owner_id)][tgl_str]["channel"] += channel_baru
+
+    write_rekap(data)
+
+    try:
+        await client.send_file(
+            PRIVATE_CHANNEL_ID,
+            REKAP_FILE,
+            caption=f"📊 Rekap data owner {owner_id}"
+        )
+    except Exception as e:
+        log_error("upload rekap ke channel", e)
+
+    await kirim_pesan_total(client, owner_id, data[str(owner_id)])
+
+
+async def kirim_pesan_total(client, owner_id, data_owner):
+    teks = "🎉 Total Grup/Channel dibuat :\n"
+    for tgl, rec in sorted(data_owner.items()):
+        teks += f"⏺️Tanggal {tgl} Total --> {rec['grup']} Grup / {rec['channel']} Channel\n"
+
+    async for msg in client.iter_messages(PRIVATE_CHANNEL_ID, from_user="me"):
+        if msg.text and msg.text.startswith("🎉 Total Grup/Channel"):
+            await msg.delete()
+            break
+
+    await client.send_message(PRIVATE_CHANNEL_ID, teks)
+
+
 # === HELP MENU BUAT ===
 HELP = {
     "buat": [
