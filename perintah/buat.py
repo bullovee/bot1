@@ -245,27 +245,26 @@ async def mulai_buat(client, event, session, auto_count):
         log_error("FloodWait Global", e)
     except Exception as e:
         gagal = jumlah - sukses
-        except Exception as e:
-    log_error(f"pembuatan {nama_group}", e)
+        log_error(f"pembuatan {nama_group}", e)
     # 📝 Tambahan cek limit FloodWait dengan waktu selesai
-    if "A wait of" in str(e) and "seconds is required" in str(e):
-        try:
-            detik = int(str(e).split("A wait of ")[1].split(" seconds")[0])
-            jam = detik // 3600
-            menit = (detik % 3600) // 60
-            detik_sisa = detik % 60
-            waktu_buka = datetime.now(WIB) + timedelta(seconds=detik)
-            waktu_str = waktu_buka.strftime("%d %B %Y %H:%M:%S WIB")
-            hasil.append(
-                f"❌ {nama_group} Gagal Limit s/d ± {jam} jam {menit} menit {detik_sisa} detik ({waktu_str})"
-            )
-        except Exception:
+        if "A wait of" in str(e) and "seconds is required" in str(e):
+            try:
+                detik = int(str(e).split("A wait of ")[1].split(" seconds")[0])
+                jam = detik // 3600
+                menit = (detik % 3600) // 60
+                detik_sisa = detik % 60
+                waktu_buka = datetime.now(WIB) + timedelta(seconds=detik)
+                waktu_str = waktu_buka.strftime("%d %B %Y %H:%M:%S WIB")
+                hasil.append(
+                    f"❌ {nama_group} Gagal Limit s/d ± {jam} jam {menit} menit {detik_sisa} detik ({waktu_str})"
+                )
+            except Exception:
+                hasil.append(f"❌ {nama_group} (error: {e})")
+        else:
+            # Baris asli tetap ada 👇
             hasil.append(f"❌ {nama_group} (error: {e})")
-    else:
-        # Baris asli tetap ada 👇
-        hasil.append(f"❌ {nama_group} (error: {e})")
 
-    gagal += 1
+        gagal += 1
 
     now = datetime.now(WIB)
     hari = HARI_ID[now.strftime("%A")]
